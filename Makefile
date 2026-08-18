@@ -1,24 +1,12 @@
 
-TAG         ?= r36.4.0
-RELEASE     ?= r36.4
-TAG_JP721   ?= r39.2.1
+TAG_JP721     ?= r39.2.1
 RELEASE_JP721 ?= r39.2
-VIDEO_GID   ?= 44
-RENDER_GID  ?= 993
-L4T_JETPACK_REGISTRY ?= "nvcr.io/nvidia/l4t-jetpack"
+VIDEO_GID     ?= 44
+RENDER_GID    ?= 993
+L4T_JETPACK_REGISTRY ?= nvcr.io/nvidia/l4t-jetpack
 
 # Docker Hub destination for `make push_jp72`.
 HUB_REGISTRY ?= docker.io/whitesscott/l4t-jetpack
-
-image_jp5:
-	docker build --platform=linux/arm64 -t $(L4T_JETPACK_REGISTRY):$(TAG) \
-		--build-arg "TAG=$(TAG)" \
-		-f ./Dockerfile.jetpack_5 .
-
-image_jp6:
-	docker build --platform=linux/arm64 -t $(L4T_JETPACK_REGISTRY):$(TAG) \
-		--build-arg "RELEASE=$(RELEASE)" \
-		-f ./Dockerfile.jetpack_6 .
 
 image_jp72:
 	docker build --progress=plain --platform=linux/arm64 -t $(L4T_JETPACK_REGISTRY):$(TAG_JP721) \

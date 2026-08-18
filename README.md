@@ -1,15 +1,14 @@
-# Image details
+# l4t-jetpack — JetPack 7.2.1 image (L4T r39.2.1, Ubuntu 24.04, Thor / Orin)
 
-Use cases addressed by this image:
-1) Ablility to build and run CUDA samples
-2) Ablility to build and run CuDNN samples
-3) Ablility to build and run TensorRT samples
-4) Ablility to build and run VPI samples
-5) Ablility to build and run OpenCV samples
+A working, corrected build of the NVIDIA L4T JetPack developer image for
+**JetPack 7.2.1 (L4T r39.2.1)** on Jetson AGX Thor and Orin devkits.
+Ubuntu 24.04 Noble, aarch64. Based on `nvcr.io/nvidia/base/ubuntu:24.04`
+plus the `repo.download.nvidia.com/jetson/{common,som,ffmpeg} r39.2` apt repos.
 
-# JetPack 7.2.1 image (L4T r39.2.1, Ubuntu 24.04, Thor / Orin)
+Published image: [`whitesscott/l4t-jetpack`](https://hub.docker.com/r/whitesscott/l4t-jetpack) on Docker Hub.
 
-Build:
+## Build
+
 ```bash
 make image_jp72
 
@@ -17,12 +16,13 @@ make image_jp72
 make image_jp72 RENDER_GID=$(getent group render | cut -d: -f3)
 ```
 
-Quick sanity check after build:
+## Sanity check
+
 ```bash
 make smoke_jp72
 ```
 
-Run:
+## Run
 ```bash
 docker run -it --rm --name jetpack --network host \
   --runtime=nvidia --gpus=all \
@@ -35,7 +35,19 @@ docker run -it --rm --name jetpack --network host \
 ```
 Substitute `whitesscott/l4t-jetpack:jp7.2.1-thor` for the Docker Hub-pulled image instead of the locally-built tag.
 
-Confirmed working on NVIDIA Thor (SM 11.0):
+## Push to Docker Hub
+
+```bash
+docker login
+make push_jp72   # tags r39.2.1, jp7.2.1-thor, latest and pushes all three
+```
+
+Override the Hub namespace on the fly:
+```bash
+make push_jp72 HUB_REGISTRY=docker.io/your-org/l4t-jetpack
+```
+
+## Confirmed working on NVIDIA Thor (SM 11.0)
 
 - **CUDA 13.2.2** — `nvcc` compiles + on-device kernel executes (`atomicAdd` returns expected 65536)
 - **cuDNN 9.20.0.46** — `cudnnGetVersion()` returns 92000 via real link
@@ -63,17 +75,19 @@ docker inspect whitesscott/l4t-jetpack:latest | jq '.[0].Config'   # ENV, ENTRYP
 
 These always reflect the manifest of the exact image you're about to run — no drift possible.
 
-# Container path
-Update the container path $L4T_JETPACK_REGISTRY as applicable
+## Image size
 
-# Building with new Jetpack release
-Bump the TAG variable to appropriate value
+- ~10 GB uncompressed (developer packages: CUDA toolkit + cuDNN + TRT + VPI + OpenCV all with headers).
+- ~3-4 GB compressed on the wire when pulling from Docker Hub.
 
-# Size Estimates
-* ~10.4GB if composed of all developer packages
-* ~4.7GB if composed of all runtime packages
+## Upstream
 
-# Running container and samples
-See NGC page for Jetpack container at https://catalog.ngc.nvidia.com/orgs/nvidia/containers/l4t-jetpack
+Original NVIDIA source: https://gitlab.com/nvidia/container-images/l4t-jetpack
+NGC catalog: https://catalog.ngc.nvidia.com/orgs/nvidia/containers/l4t-jetpack
 
+Pull upstream changes into this fork:
+```bash
+git fetch upstream
+git log HEAD..upstream/master --oneline   # see what's new
+git merge upstream/master                  # or rebase
 ```
