@@ -49,6 +49,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-ugly \
     gstreamer1.0-tools \
+    gstreamer1.0-x \
     i2c-tools \
     iputils-ping \
     iw \
@@ -63,6 +64,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgtk-3-0 \
     libudev1 \
     libvulkan1 \
+    libxv1 \
     libzmq5 \
     mtd-utils \
     nano \
@@ -85,6 +87,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     wireless-tools \
     wpasupplicant \
+    x11-apps \
     xauth \
     xxd \
     zstd \

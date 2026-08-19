@@ -23,9 +23,29 @@ make smoke_jp72
 ```
 
 ## Run
+
 ```bash
 docker run -it --rm --name jetpack --network host \
   --runtime=nvidia --gpus=all \
+  -e DISPLAY=$DISPLAY -v /tmp/.X11-unix/:/tmp/.X11-unix \
+  --privileged --ipc=host \
+  --ulimit memlock=-1 --ulimit stack=67108864 \
+  --shm-size=16g \
+  -e NVIDIA_VISIBLE_DEVICES=all \
+  -e NVIDIA_DRIVER_CAPABILITIES=all \
+   whitesscott/l4t-jetpack:r39.2.1
+```
+
+### With secure X11 auth (recommended for X11 forwarding)
+
+The block above works if you run `xhost +local:root` on the host first (see the "Test X11 forwarding" section). If you'd rather not open the X server to any local root process, mount your MIT-MAGIC-COOKIE-1 auth file into the container instead:
+
+```bash
+docker run -it --rm --name jetpack --network host \
+  --runtime=nvidia --gpus=all \
+  -e DISPLAY=$DISPLAY -v /tmp/.X11-unix/:/tmp/.X11-unix \
+  -e XAUTHORITY=/tmp/.Xauthority \
+  -v $XAUTHORITY:/tmp/.Xauthority:ro \
   --privileged --ipc=host \
   --ulimit memlock=-1 --ulimit stack=67108864 \
   --shm-size=16g \
@@ -33,7 +53,32 @@ docker run -it --rm --name jetpack --network host \
   -e NVIDIA_DRIVER_CAPABILITIES=all \
   nvcr.io/nvidia/l4t-jetpack:r39.2.1
 ```
-Substitute `whitesscott/l4t-jetpack:jp7.2.1-thor` for the Docker Hub-pulled image instead of the locally-built tag.
+
+Requires `$XAUTHORITY` to be set on the host (it is by default under GDM/GNOME; check with `echo $XAUTHORITY`). No `xhost` command needed — the container authenticates as your user.
+
+## Test X11 forwarding
+
+The `-e DISPLAY` + `-v /tmp/.X11-unix` mount in the run command wires up X11 so containerized apps can open windows on the host desktop. Quick verification, inside the container:
+
+```bash
+xeyes                                # simplest: a pair of eyeballs on your Thor desktop
+```
+
+Full GStreamer video pipeline to the display (proves X + Xv + GStreamer plugin registry all work):
+```bash
+gst-launch-1.0 videotestsrc num-buffers=300 pattern=smpte ! videoconvert ! xvimagesink
+```
+
+An SMPTE color-bar test pattern window should appear on your Thor desktop for ~10 seconds:
+
+![SMPTE test pattern displayed from container via X11 forwarding](picture.png)
+
+If either fails with **"No protocol specified"**, the X server rejected the container's auth. Quick fix on the host (dev workstations only):
+```bash
+xhost +local:root   # reverse with: xhost -local:root
+```
+
+Note: `ximagesink` (without the `xv`) will fail with a `BadValue` / `XInputExtension` error on Thor — protocol version mismatch between the container's libX11 and the host's X server. Use `xvimagesink` instead; it produces a better image anyway.
 
 ## Push to Docker Hub
 
@@ -59,7 +104,7 @@ make push_jp72 HUB_REGISTRY=docker.io/your-org/l4t-jetpack
 - **Multimedia** — GStreamer 1.24.2 + NVIDIA plugins (`nvarguscamerasrc`, `nvv4l2camerasrc`, `nvv4l2decoder`, `nvv4l2h264enc`, `nvv4l2h265enc`, `nvvidconv`); H.264 hardware encode with NVMM zero-copy verified end-to-end
 - **Auto-arch** — entrypoint sets `TORCH_CUDA_ARCH_LIST` from `__nvcc_device_query` (Thor → `11.0`, Orin → `8.7`)
 
-Also included: `build-essential`, `git`, `rsync`, `openssh-client`, `xauth`, `python3` + `pip` + `numpy`, locale set to `en_US.UTF-8`, `render`/`video` groups pre-created at Thor default GIDs.
+Also included: `build-essential`, `git`, `rsync`, `openssh-client`, `xauth` + `x11-apps` (`xeyes`/`xclock`) + `gstreamer1.0-x` for X11 display forwarding, `python3` + `pip` + `numpy`, locale set to `en_US.UTF-8`, `render`/`video` groups pre-created at Thor default GIDs.
 
 Not included (add downstream if needed): DeepStream, Triton, Isaac ROS, DALI, FFmpeg.
 
