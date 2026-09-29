@@ -1,8 +1,7 @@
 **
-!Dockerfile.jetpack_721
+!Dockerfile
 !requirements-torch.lock
 !requirements-python.lock
 !scripts/
 !scripts/*.py
 !scripts/*.sh
-!scripts/tested-versions.json
