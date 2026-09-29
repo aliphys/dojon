@@ -1,138 +1,310 @@
-# l4t-jetpack — JetPack 7.2.1 image (L4T r39.2.1, Ubuntu 24.04, Thor / Orin)
+# PyTorch on Jetson Orin Nano / JetPack 7.2.1
 
-A working, corrected build of the NVIDIA L4T JetPack developer image for
-**JetPack 7.2.1 (L4T r39.2.1)** on Jetson AGX Thor and Orin devkits.
-Ubuntu 24.04 Noble, aarch64. Based on `nvcr.io/nvidia/base/ubuntu:24.04`
-plus the `repo.download.nvidia.com/jetson/{common,som,ffmpeg} r39.2` apt repos.
+This image extends
+[`whitesscott/l4t-jetpack:r39.2.1`](https://hub.docker.com/r/whitesscott/l4t-jetpack)
+with PyTorch, ONNX, JupyterLab, Weights & Biases, and jtop. The base image remains
+the source of CUDA, cuDNN, TensorRT, OpenCV, and the JetPack multimedia stack.
 
-Published image: [`whitesscott/l4t-jetpack`](https://hub.docker.com/r/whitesscott/l4t-jetpack) on Docker Hub.
+- [Quick start](#quick-start)
+- [Common commands](#common-commands)
+- [Verification commands](#verification-commands)
+- [Optional tools](#optional-tools)
+- [Troubleshooting](#troubleshooting)
+- [Dependency policy](#dependency-policy)
+- [Updating dependencies](#updating-dependencies)
 
-## Build
+## Tested stack
 
-```bash
-make image_jp72
+| Component | Version |
+| --- | --- |
+| Board | Jetson Orin Nano |
+| JetPack / L4T | 7.2.1 / 39.2.1 |
+| Python | 3.12 |
+| CUDA | 13.2 |
+| cuDNN | 9.20.0.46 |
+| TensorRT | 10.16.2 |
+| PyTorch | 2.13.0+cu132 |
+| Triton | 3.7.1 |
+| ONNX / ONNX Runtime | 1.23.0 / 1.30.0 |
+| JupyterLab | 4.6.4 |
+| W&B | 0.30.0 |
+| jtop | 7.2.2 |
 
-# On a host where render GID differs from Thor default (993):
-make image_jp72 RENDER_GID=$(getent group render | cut -d: -f3)
-```
+PyTorch 2.13 is used because it targets the cuDNN 9.20 family supplied by this
+JetPack image. The newer PyTorch 2.14 build requires cuDNN 9.24. TensorRT is
+always inherited from the base image and is never upgraded with pip.
 
-## Sanity check
+## Quick start
 
-```bash
-make smoke_jp72
-```
+Run these commands on an ARM64 Jetson with JetPack 7.2.1, Docker, and NVIDIA
+Container Runtime.
 
-## Run
-
-```bash
-docker run -it --rm --name jetpack --network host \
-  --runtime=nvidia --gpus=all \
-  -e DISPLAY=$DISPLAY -v /tmp/.X11-unix/:/tmp/.X11-unix \
-  --privileged --ipc=host \
-  --ulimit memlock=-1 --ulimit stack=67108864 \
-  --shm-size=16g \
-  -e NVIDIA_VISIBLE_DEVICES=all \
-  -e NVIDIA_DRIVER_CAPABILITIES=all \
-   whitesscott/l4t-jetpack:r39.2.1
-```
-
-### With secure X11 auth (recommended for X11 forwarding)
-
-The block above works if you run `xhost +local:root` on the host first (see the "Test X11 forwarding" section). If you'd rather not open the X server to any local root process, mount your MIT-MAGIC-COOKIE-1 auth file into the container instead:
-
-```bash
-docker run -it --rm --name jetpack --network host \
-  --runtime=nvidia --gpus=all \
-  -e DISPLAY=$DISPLAY -v /tmp/.X11-unix/:/tmp/.X11-unix \
-  -e XAUTHORITY=/tmp/.Xauthority \
-  -v $XAUTHORITY:/tmp/.Xauthority:ro \
-  --privileged --ipc=host \
-  --ulimit memlock=-1 --ulimit stack=67108864 \
-  --shm-size=16g \
-  -e NVIDIA_VISIBLE_DEVICES=all \
-  -e NVIDIA_DRIVER_CAPABILITIES=all \
-  nvcr.io/nvidia/l4t-jetpack:r39.2.1
-```
-
-Requires `$XAUTHORITY` to be set on the host (it is by default under GDM/GNOME; check with `echo $XAUTHORITY`). No `xhost` command needed — the container authenticates as your user.
-
-## Test X11 forwarding
-
-The `-e DISPLAY` + `-v /tmp/.X11-unix` mount in the run command wires up X11 so containerized apps can open windows on the host desktop. Quick verification, inside the container:
+Check the host:
 
 ```bash
-xeyes                                # simplest: a pair of eyeballs on your Thor desktop
+cat /etc/nv_tegra_release
+uname -m
+docker info --format '{{json .Runtimes}}'
 ```
 
-Full GStreamer video pipeline to the display (proves X + Xv + GStreamer plugin registry all work):
-```bash
-gst-launch-1.0 videotestsrc num-buffers=300 pattern=smpte ! videoconvert ! xvimagesink
-```
+Expect R39 revision 2.1, `aarch64`, and an `nvidia` runtime.
 
-An SMPTE color-bar test pattern window should appear on your Thor desktop for ~10 seconds:
-
-![SMPTE test pattern displayed from container via X11 forwarding](picture.png)
-
-If either fails with **"No protocol specified"**, the X server rejected the container's auth. Quick fix on the host (dev workstations only):
-```bash
-xhost +local:root   # reverse with: xhost -local:root
-```
-
-Note: `ximagesink` (without the `xv`) will fail with a `BadValue` / `XInputExtension` error on Thor — protocol version mismatch between the container's libX11 and the host's X server. Use `xvimagesink` instead; it produces a better image anyway.
-
-## Push to Docker Hub
+Build the image from this repository:
 
 ```bash
-docker login
-make push_jp72   # tags r39.2.1, jp7.2.1-thor, latest and pushes all three
+docker build --pull --platform linux/arm64 \
+  -f Dockerfile.jetpack_721 -t orin-ml:jp721 .
 ```
 
-Override the Hub namespace on the fly:
-```bash
-make push_jp72 HUB_REGISTRY=docker.io/your-org/l4t-jetpack
-```
-
-## Confirmed working on NVIDIA Thor (SM 11.0)
-
-- **CUDA 13.2.2** — `nvcc` compiles + on-device kernel executes (`atomicAdd` returns expected 65536)
-- **cuDNN 9.20.0.46** — `cudnnGetVersion()` returns 92000 via real link
-- **TensorRT 10.16.2** — `getInferLibVersion()` returns 101602; builder resources present for sm_110, sm_100, sm_120, sm_75-89
-- **cuDLA 13.2** — headers + libs installed (runtime not exercised)
-- **VPI 4.1.4** — Python `import vpi` succeeds
-- **OpenCV 4.8.0** — Python `import cv2` succeeds
-- **PyTorch** — installable via `pip install --index-url https://pypi.jetson-ai-lab.io/sbsa/cu132 torch`; `torch.mm` on `device="cuda"` runs on Thor
-- **Multimedia** — GStreamer 1.24.2 + NVIDIA plugins (`nvarguscamerasrc`, `nvv4l2camerasrc`, `nvv4l2decoder`, `nvv4l2h264enc`, `nvv4l2h265enc`, `nvvidconv`); H.264 hardware encode with NVMM zero-copy verified end-to-end
-- **Auto-arch** — entrypoint sets `TORCH_CUDA_ARCH_LIST` from `__nvcc_device_query` (Thor → `11.0`, Orin → `8.7`)
-
-Also included: `build-essential`, `git`, `rsync`, `openssh-client`, `xauth` + `x11-apps` (`xeyes`/`xclock`) + `gstreamer1.0-x` for X11 display forwarding, `python3` + `pip` + `numpy`, locale set to `en_US.UTF-8`, `render`/`video` groups pre-created at Thor default GIDs.
-
-Not included (add downstream if needed): DeepStream, Triton, Isaac ROS, DALI, FFmpeg.
-
-## Inspect the published image
-
-The Docker Hub overview intentionally doesn't paste the full Dockerfile — it goes stale on every rebuild. Inspect the actual pushed image directly:
+Start an interactive shell:
 
 ```bash
-docker pull whitesscott/l4t-jetpack:latest
-docker history whitesscott/l4t-jetpack:latest --no-trunc   # every RUN/COPY layer with its command
-docker inspect whitesscott/l4t-jetpack:latest | jq '.[0].Config'   # ENV, ENTRYPOINT, CMD, exposed ports
+docker run --rm -it --runtime=nvidia --shm-size=1g \
+  -v "$PWD":/workspace -w /workspace \
+  orin-ml:jp721
 ```
 
-These always reflect the manifest of the exact image you're about to run — no drift possible.
+Verify CUDA, PyTorch, ONNX, and TensorRT:
 
-## Image size
+```bash
+docker run --rm --runtime=nvidia --shm-size=256m orin-ml:jp721 \
+  python3 /opt/image-checks/verify-gpu.py
+```
 
-- ~10 GB uncompressed (developer packages: CUDA toolkit + cuDNN + TRT + VPI + OpenCV all with headers).
-- ~3-4 GB compressed on the wire when pulling from Docker Hub.
+Use `sudo docker` if your account does not have Docker access.
+
+## Common commands
+
+### Start JupyterLab
+
+```bash
+docker run --rm -it --runtime=nvidia --shm-size=1g \
+  -e ENABLE_JUPYTER=1 -e JUPYTER_PORT=8888 \
+  -p 127.0.0.1:8888:8888 \
+  -v "$PWD":/workspace -w /workspace \
+  orin-ml:jp721
+```
+
+`ENABLE_JUPYTER=1` starts the JupyterLab server. A Python kernel starts when a
+notebook is opened. Jupyter is disabled by default; set `ENABLE_JUPYTER=0`
+explicitly if desired. Accepted values are `0/1`, `false/true`, and `no/yes`.
+
+`JUPYTER_PORT` defaults to `8888`. If it is changed, update both sides of
+`-p HOST_PORT:CONTAINER_PORT`. Authentication remains enabled; use the token
+printed in the container logs.
+
+To access Jupyter from another computer:
+
+```bash
+ssh -N -L 8888:127.0.0.1:8888 YOUR_USER@JETSON_HOST
+```
+
+Then open <http://localhost:8888>.
+
+### Run a command without Jupyter
+
+```bash
+docker run --rm --runtime=nvidia -e ENABLE_JUPYTER=0 \
+  orin-ml:jp721 python3 -c 'import torch; print(torch.__version__)'
+```
+
+### Mount a project
+
+```bash
+docker run --rm -it --runtime=nvidia --shm-size=1g \
+  -v /path/to/project:/workspace -w /workspace \
+  orin-ml:jp721
+```
+
+Changes under `/workspace` are stored on the host. Increase shared memory only
+when the workload and available Orin Nano RAM justify it.
+
+## Verification commands
+
+Run hardware checks separately to keep memory use low:
+
+```bash
+# PyTorch CUDA, cuDNN, ONNX Runtime, and TensorRT
+docker run --rm --runtime=nvidia --shm-size=256m orin-ml:jp721 \
+  python3 /opt/image-checks/verify-gpu.py
+
+# torch.cond early exit through PyTorch, ONNX, and TensorRT on CUDA
+docker run --rm --runtime=nvidia --shm-size=256m orin-ml:jp721 \
+  python3 /opt/image-checks/verify-torch-cond.py
+
+# Jupyter server and notebook kernel
+docker run --rm --runtime=nvidia --shm-size=256m orin-ml:jp721 \
+  python3 /opt/image-checks/verify-tools.py notebook
+
+# W&B offline logging
+docker run --rm orin-ml:jp721 \
+  python3 /opt/image-checks/verify-tools.py wandb
+
+# jtop connection to the host service
+docker run --rm --runtime=nvidia \
+  --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
+  orin-ml:jp721 python3 /opt/image-checks/verify-tools.py jtop
+```
+
+The conditional test should include:
+
+```text
+PASS torch.cond selects both branches on CUDA
+PASS TensorRT runs both outputs on CUDA and skips the large branch on early exit
+```
+
+The image build runs the version and import checks automatically. Runtime checks
+exit with a nonzero status when a required check fails.
+
+## Optional tools
+
+### jtop
+
+Install and start
+[`jetson-stats`](https://rnext.it/jetson_stats/) on the Jetson host and verify
+that `/run/jtop.sock` exists. The container pins jtop 7.2.2 to the upstream
+commit matching the tested host service.
+
+```bash
+docker run --rm -it --runtime=nvidia \
+  --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
+  orin-ml:jp721 jtop
+```
+
+Add the same socket mount to shell or Jupyter commands when they need jtop.
+
+### Weights & Biases
+
+Run `wandb login` inside the container for online use. For local logging:
+
+```bash
+docker run --rm -it -e WANDB_MODE=offline \
+  -v "$PWD":/workspace -w /workspace \
+  orin-ml:jp721
+```
+
+Do not store API keys in the image.
+
+### X11
+
+For a Jetson desktop using X11/Xwayland, add:
+
+```bash
+-e DISPLAY="$DISPLAY" \
+-v /tmp/.X11-unix:/tmp/.X11-unix \
+-e XAUTHORITY=/tmp/.Xauthority \
+-v "$XAUTHORITY":/tmp/.Xauthority:ro
+```
+
+Graphical behavior depends on the host desktop and its X authorization setup.
+
+## Troubleshooting
+
+### PyTorch reports unsupported Orin compute capability
+
+PyTorch 2.13 may warn about Orin compute capability 8.7 even when its CUDA kernels
+execute successfully. The verification scripts run real matrix multiplication,
+convolution, attention, Triton, and TensorRT workloads instead of relying only on
+`torch.cuda.is_available()`. NVIDIA discusses the warning in this
+[JetPack 7.2 thread](https://forums.developer.nvidia.com/t/how-do-i-correctly-install-pytorch-on-jetpack-7-2/372773/7).
+
+### pip reports missing CUDA or cuDNN packages
+
+`pip check` reports missing `cuda-toolkit` and `nvidia-cudnn-cu13` wheel
+metadata because JetPack supplies those libraries as system packages. Do not
+install replacement CUDA, cuDNN, or TensorRT wheels to silence the warning.
+
+### jtop raises `KeyError: 'online'`
+
+The tested host exposes a VIC engine entry without the field expected by jtop's
+compact statistics API. Raw GPU and memory readings work. This is a known jtop
+compatibility issue; the image does not patch the host service.
+
+### The container runs out of memory
+
+Run GPU and notebook tests in separate containers, close unused desktop
+applications, and avoid unnecessarily large `--shm-size` values. A combined
+GPU and notebook test exceeded a 1.5 GiB memory limit during validation.
+
+### Jupyter is unreachable
+
+Confirm that `ENABLE_JUPYTER=1` is set, the host and container ports match
+`JUPYTER_PORT`, and SSH port forwarding remains open when connecting remotely.
+
+## Included files
+
+| File | Purpose |
+| --- | --- |
+| `Dockerfile.jetpack_721` | Builds the PyTorch extension image |
+| `requirements-torch.lock` | PyTorch, Triton, and supplemental GPU libraries |
+| `requirements-python.lock` | ONNX, Jupyter, W&B, jtop, and their dependencies |
+| `scripts/start-container.sh` | Selects shell or Jupyter startup mode |
+| `scripts/tested-versions.json` | Expected package versions |
+| `scripts/verify-build.py` | Build-time version, dependency, and import checks |
+| `scripts/verify-gpu.py` | CUDA, cuDNN, ONNX, and TensorRT runtime checks |
+| `scripts/verify-torch-cond.py` | Conditional early-exit check on CUDA |
+| `scripts/verify-tools.py` | Jupyter, W&B, and jtop checks |
+
+## Dependency policy
+
+The NVIDIA stack is the compatibility anchor:
+
+- CUDA, cuDNN, TensorRT, OpenCV, and JetPack libraries come from the base image.
+- PyTorch and every added Python dependency are pinned by exact version or
+  immutable source URL.
+- Pip installs use `--no-deps` so dependency resolution cannot replace the
+  NVIDIA system stack.
+- NCCL 2.29.7, cuSPARSELt 0.8.1, and NVSHMEM 3.4.5 are added because PyTorch
+  requires them and the base image does not provide them.
+
+The former Jetson AI Lab `/sbsa/cu132` URL redirected to generic PyPI during
+testing and selected a CUDA 13.0 wheel. This image therefore uses the official
+PyTorch CUDA 13.2 ARM64 wheel directly. NVIDIA confirms that upstream SBSA wheels
+work on Orin with JetPack 7.2 in this
+[forum response](https://forums.developer.nvidia.com/t/how-do-i-correctly-install-pytorch-on-jetpack-7-2/372773/5).
+
+Torchvision and Ultralytics are not included.
+
+## Updating dependencies
+
+Treat the base image and GPU dependencies as one compatibility set:
+
+1. Select a base version and compatible PyTorch, Triton, NCCL, cuSPARSELt, and
+   NVSHMEM versions.
+2. Keep CUDA, cuDNN, and TensorRT supplied by the base image.
+3. Update exact versions or immutable URLs in the appropriate lock file.
+4. Update `scripts/tested-versions.json`.
+5. Rebuild and run every verification command above on the Jetson.
+
+BuildKit caches pip downloads outside the image. Reusing the same Docker builder
+avoids downloading large PyTorch and GPU packages again.
+
+## Validated behavior
+
+The image was tested on Jetson Orin Nano with L4T 39.2.1:
+
+- PyTorch CUDA matrix multiplication, cuDNN convolution, FP16, attention, and
+  `torch.compile` with Triton.
+- ONNX export and validation, ONNX Runtime ARM64 CPU inference, and TensorRT GPU
+  inference.
+- `torch.cond` early and full branches in PyTorch and TensorRT on CUDA.
+  TensorRT profiling confirmed that the large FC branch was skipped on early exit.
+- Authenticated JupyterLab startup and GPU execution from a notebook kernel.
+- W&B offline metric logging.
+- jtop host connection and raw GPU and memory readings.
+
+Runtime library paths confirmed that CUDA 13.2, cuDNN 9.20, and TensorRT 10.16.2
+came from the base image.
 
 ## Upstream
 
-Original NVIDIA source: https://gitlab.com/nvidia/container-images/l4t-jetpack
-NGC catalog: https://catalog.ngc.nvidia.com/orgs/nvidia/containers/l4t-jetpack
+Thanks to whitesscott for the published JetPack base image:
 
-Pull upstream changes into this fork:
 ```bash
-git fetch upstream
-git log HEAD..upstream/master --oneline   # see what's new
-git merge upstream/master                  # or rebase
+docker image inspect whitesscott/l4t-jetpack:r39.2.1
+docker history --no-trunc whitesscott/l4t-jetpack:r39.2.1
 ```
+
+Original NVIDIA container sources:
+<https://gitlab.com/nvidia/container-images/l4t-jetpack>.
+Retain applicable upstream license notices when redistributing source or images.
