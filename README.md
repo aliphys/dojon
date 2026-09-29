@@ -1,8 +1,14 @@
-# PyTorch on Jetson Orin Nano / JetPack 7.2.1
+# dojon
 
-This image extends
+**dojon** is a machine-learning training dojo for the NVIDIA Jetson Orin Nano.
+It provides a reproducible, GPU-enabled environment for learning, experimenting,
+and getting practical ML work done on the edge. The name combines **do** with
+**JON** (Jetson Orin Nano), while *dojon* is Swedish for “the dojo.” 😎
+
+The `dojon` container image extends
 [`whitesscott/l4t-jetpack:r39.2.1`](https://hub.docker.com/r/whitesscott/l4t-jetpack)
-with PyTorch, ONNX, JupyterLab, Weights & Biases, and jtop. The base image remains
+with PyTorch, Torchvision, TorchAudio, ONNX, Pillow, SciPy, tqdm, Matplotlib,
+Seaborn, JupyterLab, Weights & Biases, and jtop. The base image remains
 the source of CUDA, cuDNN, TensorRT, OpenCV, and the JetPack multimedia stack.
 
 - [Quick start](#quick-start)
@@ -24,7 +30,10 @@ the source of CUDA, cuDNN, TensorRT, OpenCV, and the JetPack multimedia stack.
 | cuDNN | 9.20.0.46 |
 | TensorRT | 10.16.2 |
 | PyTorch | 2.13.0+cu132 |
+| Torchvision / TorchAudio | 0.28.0+cu132 / 2.11.0+cu132 |
 | Triton | 3.7.1 |
+| SciPy / tqdm | 1.17.1 / 4.70.1 |
+| Matplotlib / Seaborn | 3.11.2 / 0.13.2 |
 | ONNX / ONNX Runtime | 1.23.0 / 1.30.0 |
 | JupyterLab | 4.6.4 |
 | W&B | 0.30.0 |
@@ -53,7 +62,7 @@ Build the image from this repository:
 
 ```bash
 docker build --pull --platform linux/arm64 \
-  -f Dockerfile.jetpack_721 -t orin-ml:jp721 .
+  -f Dockerfile.jetpack_721 -t dojon:jp721 .
 ```
 
 Start an interactive shell:
@@ -61,13 +70,13 @@ Start an interactive shell:
 ```bash
 docker run --rm -it --runtime=nvidia --shm-size=1g \
   -v "$PWD":/workspace -w /workspace \
-  orin-ml:jp721
+  dojon:jp721
 ```
 
 Verify CUDA, PyTorch, ONNX, and TensorRT:
 
 ```bash
-docker run --rm --runtime=nvidia --shm-size=256m orin-ml:jp721 \
+docker run --rm --runtime=nvidia --shm-size=256m dojon:jp721 \
   python3 /opt/image-checks/verify-gpu.py
 ```
 
@@ -82,7 +91,7 @@ docker run --rm -it --runtime=nvidia --shm-size=1g \
   -e ENABLE_JUPYTER=1 -e JUPYTER_PORT=8888 \
   -p 127.0.0.1:8888:8888 \
   -v "$PWD":/workspace -w /workspace \
-  orin-ml:jp721
+  dojon:jp721
 ```
 
 `ENABLE_JUPYTER=1` starts the JupyterLab server. A Python kernel starts when a
@@ -105,7 +114,7 @@ Then open <http://localhost:8888>.
 
 ```bash
 docker run --rm --runtime=nvidia -e ENABLE_JUPYTER=0 \
-  orin-ml:jp721 python3 -c 'import torch; print(torch.__version__)'
+  dojon:jp721 python3 -c 'import torch; print(torch.__version__)'
 ```
 
 ### Mount a project
@@ -113,7 +122,7 @@ docker run --rm --runtime=nvidia -e ENABLE_JUPYTER=0 \
 ```bash
 docker run --rm -it --runtime=nvidia --shm-size=1g \
   -v /path/to/project:/workspace -w /workspace \
-  orin-ml:jp721
+  dojon:jp721
 ```
 
 Changes under `/workspace` are stored on the host. Increase shared memory only
@@ -125,25 +134,25 @@ Run hardware checks separately to keep memory use low:
 
 ```bash
 # PyTorch CUDA, cuDNN, ONNX Runtime, and TensorRT
-docker run --rm --runtime=nvidia --shm-size=256m orin-ml:jp721 \
+docker run --rm --runtime=nvidia --shm-size=256m dojon:jp721 \
   python3 /opt/image-checks/verify-gpu.py
 
 # torch.cond early exit through PyTorch, ONNX, and TensorRT on CUDA
-docker run --rm --runtime=nvidia --shm-size=256m orin-ml:jp721 \
+docker run --rm --runtime=nvidia --shm-size=256m dojon:jp721 \
   python3 /opt/image-checks/verify-torch-cond.py
 
 # Jupyter server and notebook kernel
-docker run --rm --runtime=nvidia --shm-size=256m orin-ml:jp721 \
+docker run --rm --runtime=nvidia --shm-size=256m dojon:jp721 \
   python3 /opt/image-checks/verify-tools.py notebook
 
 # W&B offline logging
-docker run --rm orin-ml:jp721 \
+docker run --rm dojon:jp721 \
   python3 /opt/image-checks/verify-tools.py wandb
 
 # jtop connection to the host service
 docker run --rm --runtime=nvidia \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
-  orin-ml:jp721 python3 /opt/image-checks/verify-tools.py jtop
+  dojon:jp721 python3 /opt/image-checks/verify-tools.py jtop
 ```
 
 The conditional test should include:
@@ -168,7 +177,7 @@ commit matching the tested host service.
 ```bash
 docker run --rm -it --runtime=nvidia \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
-  orin-ml:jp721 jtop
+  dojon:jp721 jtop
 ```
 
 Add the same socket mount to shell or Jupyter commands when they need jtop.
@@ -180,7 +189,7 @@ Run `wandb login` inside the container for online use. For local logging:
 ```bash
 docker run --rm -it -e WANDB_MODE=offline \
   -v "$PWD":/workspace -w /workspace \
-  orin-ml:jp721
+  dojon:jp721
 ```
 
 Do not store API keys in the image.
@@ -250,6 +259,9 @@ Confirm that `ENABLE_JUPYTER=1` is set, the host and container ports match
 The NVIDIA stack is the compatibility anchor:
 
 - CUDA, cuDNN, TensorRT, OpenCV, and JetPack libraries come from the base image.
+- The official CUDA 13.2 Torchvision wheel keeps its compiled operators and
+  private CUDA runtime namespaced inside the package; it does not replace the
+  system CUDA runtime, cuDNN, or TensorRT.
 - PyTorch and every added Python dependency are pinned by exact version or
   immutable source URL.
 - Pip installs use `--no-deps` so dependency resolution cannot replace the
@@ -263,7 +275,7 @@ PyTorch CUDA 13.2 ARM64 wheel directly. NVIDIA confirms that upstream SBSA wheel
 work on Orin with JetPack 7.2 in this
 [forum response](https://forums.developer.nvidia.com/t/how-do-i-correctly-install-pytorch-on-jetpack-7-2/372773/5).
 
-Torchvision and Ultralytics are not included.
+Ultralytics is not included.
 
 ## Updating dependencies
 

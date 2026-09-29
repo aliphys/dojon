@@ -36,12 +36,23 @@ for name in expected:
             raise RuntimeError(f"{name}: {requirement}, but installed {actual}")
 
 for name in (
-    "torch", "triton", "tensorrt", "cv2", "numpy", "onnx", "onnxruntime",
-    "jtop", "wandb", "jupyterlab", "ipykernel",
+    "torch", "torchvision", "torchaudio", "triton", "tensorrt", "cv2",
+    "numpy", "PIL", "scipy", "tqdm", "pandas", "matplotlib", "seaborn",
+    "onnx", "onnxruntime", "jtop", "wandb", "jupyterlab", "ipykernel",
 ):
     importlib.import_module(name)
 import cv2
 import torch
 assert cv2.__version__ == "4.8.0", cv2.__version__
 assert torch.version.cuda == "13.2", torch.version.cuda
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import seaborn as sns
+figure, axis = plt.subplots()
+sns.lineplot(x=[0, 1], y=[0, 1], ax=axis)
+figure.canvas.draw()
+plt.close(figure)
+
 print(f"Build checks passed: {len(expected)} locked/base distributions; PyTorch {torch.__version__}.")
