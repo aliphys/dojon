@@ -15,12 +15,19 @@ trap cleanup EXIT INT TERM
 case "${ENABLE_OLLAMA:-0}" in
     1|true|yes)
         mkdir -p "${OLLAMA_MODELS:-/root/.ollama}"
+        export OLLAMA_IGPU_ENABLE="${OLLAMA_IGPU_ENABLE:-1}"
+        export GGML_BACKEND_PATH="${GGML_BACKEND_PATH:-/usr/lib/ollama/cuda_v13/libggml-cuda.so}"
+        export LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/lib/ollama:/usr/lib/ollama/cuda_v13${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
         ollama serve &
         ollama_pid=$!
 
         i=0
         until curl -fsS "http://127.0.0.1:${OLLAMA_PORT:-11434}/api/tags" >/dev/null 2>&1; do
             i=$((i + 1))
+            if ! kill -0 "$ollama_pid" 2>/dev/null; then
+                echo "Ollama exited before becoming ready" >&2
+                exit 1
+            fi
             if [ "$i" -ge 60 ]; then
                 echo "Ollama did not become ready" >&2
                 exit 1

@@ -54,7 +54,13 @@ docker run --rm -it --runtime=nvidia --shm-size=1g \
 Ollama and JupyterLab can run together in the same container. Ollama runs as a
 background service on port `11434`, while JupyterLab remains the foreground
 process on port `8888`. Enable both services and persist models outside the
-image:
+image. The startup script enables Ollama's Jetson iGPU path and CUDA 13
+backend, which is needed because the current Ollama installer does not yet
+recognize JetPack 7/R39 automatically:
+
+The image pins Ollama `0.35.0`. The JetPack 7 `cuda_v13` backend is retained,
+but its bundled CUDA runtime libraries are removed so the backend resolves CUDA
+from the NGC base image.
 
 ```bash
 mkdir -p "$HOME/ollama-models"
@@ -136,6 +142,45 @@ Cloudflare Tunnel HTTP path rule for `jetson.example.com/jupyter*` pointing to
 https://jetson.example.com/jupyter/
 ```
 
+#### Ollama through `/ollama`
+
+When a separate Ollama hostname cannot be used because of certificate coverage,
+publish Ollama through a path on the existing hostname. Add this Cloudflare
+Tunnel route **before** the SSH fallback route:
+
+```yaml
+- hostname: jetson.example.com
+  path: /ollama/*
+  service: http://127.0.0.1:11434
+```
+
+Cloudflare must also remove the `/ollama` prefix before forwarding the request.
+Create a URL Rewrite Transform Rule matching:
+
+```text
+http.host eq "jetson.example.com"
+and starts_with(http.request.uri.path, "/ollama")
+```
+
+Rewrite the path with:
+
+```text
+substring(http.request.uri.path, 7)
+```
+
+This makes `/ollama/api/tags` arrive at Ollama as `/api/tags`. Keep the
+`/ollama/*` route above the existing `ssh://localhost:22` route; otherwise the
+request is interpreted as SSH traffic.
+
+Test the remote API with:
+
+```bash
+curl https://jetson.example.com/ollama/api/tags
+curl https://jetson.example.com/ollama/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gemma3:1b","prompt":"Say hello","stream":false}'
+```
+
 #### Connect from VS Code
 
 Install the **Jupyter** extension in VS Code, then:
@@ -213,6 +258,9 @@ docker run --rm dojon:26.09 \
 docker run --rm --runtime=nvidia \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
   dojon:26.09 python3 /opt/image-checks/verify-tools.py jtop
+
+# Ollama model generation and 100% GPU offload (model must already be pulled)
+docker exec dojon python3 /opt/image-checks/verify-ollama.py
 ```
 
 ## FAQ and troubleshooting
