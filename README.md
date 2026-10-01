@@ -12,6 +12,9 @@ Weights & Biases, and jtop. PyTorch, CUDA, cuDNN, TensorRT, JupyterLab, and
 other framework libraries come from the NGC base image; project package lists
 do not reinstall those components.
 
+Ollama is included as an optional ARM64 runtime. It does not download models
+during the image build.
+
 ## Compatibility
 
 Tested on a Jetson Orin Nano with JetPack/L4T R39.2.1. The NGC tag publishes an
@@ -41,9 +44,46 @@ Build for ARM64 and run on a Jetson with Docker and NVIDIA Container Runtime:
 docker build --pull --platform linux/arm64 -t dojon:26.09 .
 
 docker run --rm -it --runtime=nvidia --shm-size=1g \
+  --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
   -v "$PWD":/workspace -w /workspace \
   dojon:26.09
 ```
+
+### Ollama with JupyterLab
+
+Ollama and JupyterLab can run together in the same container. Ollama runs as a
+background service on port `11434`, while JupyterLab remains the foreground
+process on port `8888`. Enable both services and persist models outside the
+image:
+
+```bash
+mkdir -p "$HOME/ollama-models"
+
+docker run --rm -it --runtime=nvidia --shm-size=1g \
+  --name dojon \
+  --env-file .env \
+  -e ENABLE_OLLAMA=1 -e OLLAMA_HOST=0.0.0.0:11434 \
+  -e OLLAMA_MODELS=/models \
+  -e ENABLE_JUPYTER=1 -e JUPYTER_PORT=8888 \
+  -e JUPYTER_BASE_URL=/jupyter/ \
+  -p 127.0.0.1:8888:8888 -p 127.0.0.1:11434:11434 \
+  --mount type=bind,src="$HOME/ollama-models",dst=/models \
+  --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
+  -v "$PWD":/workspace -w /workspace \
+  dojon:26.09
+```
+
+In another terminal, download and test a small model:
+
+```bash
+curl http://127.0.0.1:11434/api/tags
+docker exec -it dojon ollama pull gemma3:1b
+docker exec -it dojon ollama run gemma3:1b
+```
+
+Use a 1B–4B quantized model first on the 8 GB Orin Nano. Ollama and PyTorch
+share the GPU and system memory, so a loaded model can reduce memory available
+to training or inference jobs. Keep `ENABLE_OLLAMA=0` when it is not needed.
 
 Use `sudo docker` if your account does not have Docker access. NGC access may
 require accepting NVIDIA's container license and logging in with `docker login
@@ -51,10 +91,24 @@ nvcr.io`.
 
 ### JupyterLab
 
+Create a local `.env` file from `.env.example` and set the secrets you want to
+use. The file is ignored by Git:
+
+```bash
+cp .env.example .env
+chmod 600 .env
+```
+
+The supported variables are `JUPYTER_TOKEN` for JupyterLab authentication and
+`WANDB_API_KEY` for W&B. Pass the file to Docker with `--env-file`; secrets are
+not baked into the image.
+
 ```bash
 docker run --rm -it --runtime=nvidia --shm-size=1g \
-  -e ENABLE_JUPYTER=1 -e JUPYTER_PORT=8888 \
+  --env-file .env \
+  -e ENABLE_JUPYTER=1 -e JUPYTER_PORT=8888 -e JUPYTER_BASE_URL=/jupyter/ \
   -p 127.0.0.1:8888:8888 \
+  --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
   -v "$PWD":/workspace -w /workspace \
   dojon:26.09
 ```
@@ -66,12 +120,21 @@ computer, create an SSH tunnel to forward the local port:
 ```bash
 ssh -i ~/.ssh/jetson_build \
   -N -L 8888:127.0.0.1:8888 \
-  jetson@jetson-001.aliphys.org
+  YOUR_USER@JETSON_HOST
 ```
 
 Leave this SSH command running. On the computer, open the token URL printed by
 Jupyter in a browser, changing the host and port to
-`http://127.0.0.1:8888/?token=YOUR_TOKEN`.
+`http://127.0.0.1:8888/jupyter/?token=YOUR_TOKEN`.
+
+For direct access through the existing Cloudflare hostname, configure a
+Cloudflare Tunnel HTTP path rule for `jetson.example.com/jupyter*` pointing to
+`http://127.0.0.1:8888`, before the existing SSH rule. Replace
+`jetson.example.com` with your own hostname. Then use:
+
+```text
+https://jetson.example.com/jupyter/
+```
 
 #### Connect from VS Code
 
@@ -82,7 +145,7 @@ Install the **Jupyter** extension in VS Code, then:
 3. Open the Command Palette with `Ctrl+Shift+P` and run **Jupyter: Specify
    local or remote Jupyter server for connections**.
 4. Select **Existing** and enter the complete token URL:
-   `http://127.0.0.1:8888/?token=YOUR_TOKEN`.
+   `http://127.0.0.1:8888/jupyter/?token=YOUR_TOKEN`.
 5. Select the Python kernel offered by the remote Jupyter server.
 
 Test the connection in a notebook cell:
@@ -99,9 +162,10 @@ print(torch.ones(1, device="cuda"))
 The expected output includes `True`, `Orin`, and a CUDA tensor. The SSH tunnel
 must remain open while VS Code uses the kernel.
 
-### Optional host integrations
+### Host integrations
 
-For jtop, install and start
+The standard run commands mount `/run/jtop.sock` so jtop can read host GPU,
+RAM, power, and thermal telemetry. Install and start
 [`jetson-stats`](https://rnext.it/jetson_stats/) on the host, then mount its
 socket:
 
@@ -111,8 +175,8 @@ docker run --rm -it --runtime=nvidia \
   dojon:26.09 jtop
 ```
 
-For W&B online use, run `wandb login` inside the container. Do not store API
-keys in the image.
+For W&B online use, pass `--env-file .env` to the container command. The
+`WANDB_API_KEY` value is read by the W&B SDK; do not store API keys in the image.
 
 For a Jetson desktop using X11/Xwayland, add the following arguments:
 
