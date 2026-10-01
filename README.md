@@ -58,9 +58,9 @@ image. The startup script enables Ollama's Jetson iGPU path and CUDA 13
 backend, which is needed because the current Ollama installer does not yet
 recognize JetPack 7/R39 automatically:
 
-The image pins Ollama `0.35.0`. The JetPack 7 `cuda_v13` backend is retained,
-but its bundled CUDA runtime libraries are removed so the backend resolves CUDA
-from the NGC base image.
+The image builds Ollama `0.35.0` from source for Orin Compute Capability 8.7.
+It includes only Ollama's `cuda_v13` backend, linked against CUDA from the NGC
+base image.
 
 ```bash
 mkdir -p "$HOME/ollama-models"
