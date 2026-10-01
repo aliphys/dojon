@@ -1,6 +1,5 @@
 **
 !Dockerfile
-!requirements-torch.lock
 !requirements-python.lock
 !scripts/
 !scripts/*.py

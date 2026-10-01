@@ -7,7 +7,6 @@ os.environ.setdefault("TORCHINDUCTOR_COMPILE_THREADS", "1")
 os.environ.setdefault("OMP_NUM_THREADS", "2")
 
 import torch
-import torchaudio
 import torchvision
 import tensorrt as trt
 import numpy as np
@@ -28,15 +27,14 @@ compiled = torch.compile(lambda t: t.sin() + t.cos(), fullgraph=True)
 sample = torch.randn(128, device="cuda")
 torch.testing.assert_close(compiled(sample), sample.sin() + sample.cos())
 torch.cuda.synchronize()
-assert torch.backends.cudnn.version() == 92000
+print("PyTorch:", torch.__version__, "CUDA:", torch.version.cuda,
+      "cuDNN:", torch.backends.cudnn.version(), "TensorRT:", trt.__version__, flush=True)
 print("PASS PyTorch matmul, convolution, FP16, attention and torch.compile", flush=True)
 
 boxes = torch.tensor([[0, 0, 2, 2], [0, 0, 1, 1]], device="cuda", dtype=torch.float32)
 scores = torch.tensor([0.9, 0.5], device="cuda")
 assert torchvision.ops.nms(boxes, scores, 0.5).is_cuda
-waveform = torch.randn(1, 2048, device="cuda")
-assert torchaudio.transforms.Spectrogram().cuda()(waveform).is_cuda
-print("PASS torchvision and torchaudio CUDA operations", flush=True)
+print("PASS torchvision CUDA operations", flush=True)
 
 # Exercise the complete PyTorch -> ONNX -> ONNX Runtime / TensorRT route.
 class OnnxModel(torch.nn.Module):
@@ -86,6 +84,6 @@ for path in sorted(loaded):
     if "/torchvision.libs/libcudart." in path:
         print("TORCHVISION LIBRARY:", path)
         continue
-    assert path.startswith(("/usr/lib/aarch64-linux-gnu/", "/usr/local/cuda-13.2/")), path
+    assert path.startswith(("/usr/lib/aarch64-linux-gnu/", "/usr/local/cuda-", "/usr/local/lib/")), path
     print("BASE LIBRARY:", path)
 print("All GPU checks passed.")

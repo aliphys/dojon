@@ -5,42 +5,49 @@ a reproducible, GPU-enabled environment for learning, experimenting, and getting
 practical ML work done at the edge. The name combines **do** with **JON**
 (Jetson Orin Nano), while *dojon* is Swedish for “the dojo.” 😎
 
-The image extends
-[`whitesscott/l4t-jetpack:r39.2.1`](https://hub.docker.com/r/whitesscott/l4t-jetpack)
-with PyTorch, Torchvision, TorchAudio, ONNX, SciPy, Matplotlib, JupyterLab,
-Weights & Biases, and jtop. CUDA, cuDNN, TensorRT, OpenCV, and the multimedia
-stack remain supplied by JetPack.
+The image extends NVIDIA's
+[`nvcr.io/nvidia/pytorch:26.09-py3`](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
+container with project tools including ONNX Runtime, SciPy, Matplotlib,
+Weights & Biases, and jtop. PyTorch, CUDA, cuDNN, TensorRT, JupyterLab, and
+other framework libraries come from the NGC base image; project package lists
+do not reinstall those components.
 
 ## Compatibility
 
-Tested on Jetson Orin Nano with:
+Tested on a Jetson Orin Nano with JetPack/L4T R39.2.1. The NGC tag publishes an
+ARM64 image and the GPU, ONNX, TensorRT, and `torch.cond` checks pass on the
+device. Camera, display, and multimedia integrations remain separate host
+integration concerns.
 
-| Component | Version |
+| Component | Version/status |
 | --- | --- |
-| JetPack / L4T | 7.2.1 / 39.2.1 |
-| Python / CUDA | 3.12 / 13.2 |
-| cuDNN / TensorRT | 9.20.0.46 / 10.16.2 |
-| PyTorch | 2.13.0+cu132 |
-| Torchvision / TorchAudio | 0.28.0+cu132 / 2.11.0+cu132 |
-| ONNX / ONNX Runtime | 1.23.0 / 1.30.0 |
-| JupyterLab / W&B / jtop | 4.6.4 / 0.30.0 / 7.2.2 |
+| NGC image | `nvcr.io/nvidia/pytorch:26.09-py3` (ARM64 manifest confirmed) |
+| Host JetPack / L4T | R39.2.1 / JetPack 7.2.1 |
+| Python / CUDA / PyTorch | 3.12 / 13.4 / 2.14.0a0+b2c75dd062.nv26.09 |
+| TensorRT / cuDNN | 11.3.0.99 / 9.26 |
+| JupyterLab | Supplied by NGC |
+| ONNX / ONNX Runtime / W&B / jtop | Project tool set |
 
-PyTorch 2.13 matches the cuDNN 9.20 family in this JetPack image. CUDA, cuDNN,
-TensorRT, and OpenCV are never replaced with pip packages.
+The NGC image owns the framework and CUDA software stack. The Jetson host still
+provides the kernel driver and device integration through NVIDIA Container
+Runtime. Host/container driver compatibility and GPU execution must be checked
+on the Orin Nano.
 
 ## Quick start
 
-Run on an ARM64 Jetson with JetPack 7.2.1, Docker, and NVIDIA Container Runtime.
+Build for ARM64 and run on a Jetson with Docker and NVIDIA Container Runtime:
 
 ```bash
-docker build --pull --platform linux/arm64 -t dojon:jp721 .
+docker build --pull --platform linux/arm64 -t dojon:26.09 .
 
 docker run --rm -it --runtime=nvidia --shm-size=1g \
   -v "$PWD":/workspace -w /workspace \
-  dojon:jp721
+  dojon:26.09
 ```
 
-Use `sudo docker` if your account does not have Docker access.
+Use `sudo docker` if your account does not have Docker access. NGC access may
+require accepting NVIDIA's container license and logging in with `docker login
+nvcr.io`.
 
 ### JupyterLab
 
@@ -49,15 +56,48 @@ docker run --rm -it --runtime=nvidia --shm-size=1g \
   -e ENABLE_JUPYTER=1 -e JUPYTER_PORT=8888 \
   -p 127.0.0.1:8888:8888 \
   -v "$PWD":/workspace -w /workspace \
-  dojon:jp721
+  dojon:26.09
 ```
 
 Authentication remains enabled; use the token printed in the container logs.
-For access from another computer, forward the port over SSH:
+The server listens only on the Jetson's loopback interface. From another
+computer, create an SSH tunnel to forward the local port:
 
 ```bash
-ssh -N -L 8888:127.0.0.1:8888 YOUR_USER@JETSON_HOST
+ssh -i ~/.ssh/jetson_build \
+  -N -L 8888:127.0.0.1:8888 \
+  jetson@jetson-001.aliphys.org
 ```
+
+Leave this SSH command running. On the computer, open the token URL printed by
+Jupyter in a browser, changing the host and port to
+`http://127.0.0.1:8888/?token=YOUR_TOKEN`.
+
+#### Connect from VS Code
+
+Install the **Jupyter** extension in VS Code, then:
+
+1. Start the container and SSH tunnel above.
+2. Open a `.ipynb` file in VS Code.
+3. Open the Command Palette with `Ctrl+Shift+P` and run **Jupyter: Specify
+   local or remote Jupyter server for connections**.
+4. Select **Existing** and enter the complete token URL:
+   `http://127.0.0.1:8888/?token=YOUR_TOKEN`.
+5. Select the Python kernel offered by the remote Jupyter server.
+
+Test the connection in a notebook cell:
+
+```python
+import torch
+
+print(torch.__version__)
+print(torch.cuda.is_available())
+print(torch.cuda.get_device_name(0))
+print(torch.ones(1, device="cuda"))
+```
+
+The expected output includes `True`, `Orin`, and a CUDA tensor. The SSH tunnel
+must remain open while VS Code uses the kernel.
 
 ### Optional host integrations
 
@@ -68,7 +108,7 @@ socket:
 ```bash
 docker run --rm -it --runtime=nvidia \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
-  dojon:jp721 jtop
+  dojon:26.09 jtop
 ```
 
 For W&B online use, run `wandb login` inside the container. Do not store API
@@ -85,65 +125,83 @@ For a Jetson desktop using X11/Xwayland, add the following arguments:
 
 ## Verification
 
-The build checks locked versions, dependency closure, imports, and plotting.
-Run hardware and tool checks separately to limit memory use:
+The build checks project additions, core imports, and plotting. Run hardware and
+tool checks separately to limit memory use:
 
 ```bash
-# PyTorch CUDA, Torchvision, TorchAudio, ONNX Runtime, and TensorRT
-docker run --rm --runtime=nvidia --shm-size=256m dojon:jp721 \
+# PyTorch CUDA, Torchvision, ONNX Runtime, and TensorRT
+docker run --rm --runtime=nvidia --shm-size=256m dojon:26.09 \
   python3 /opt/image-checks/verify-gpu.py
 
 # torch.cond early exit through PyTorch, ONNX, and TensorRT
-docker run --rm --runtime=nvidia --shm-size=256m dojon:jp721 \
+docker run --rm --runtime=nvidia --shm-size=256m dojon:26.09 \
   python3 /opt/image-checks/verify-torch-cond.py
 
 # Jupyter server and GPU-backed notebook kernel
-docker run --rm --runtime=nvidia --shm-size=256m dojon:jp721 \
+docker run --rm --runtime=nvidia --shm-size=256m dojon:26.09 \
   python3 /opt/image-checks/verify-tools.py notebook
 
 # W&B offline logging
-docker run --rm dojon:jp721 \
+docker run --rm dojon:26.09 \
   python3 /opt/image-checks/verify-tools.py wandb
 
 # jtop host connection
 docker run --rm --runtime=nvidia \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
-  dojon:jp721 python3 /opt/image-checks/verify-tools.py jtop
+  dojon:26.09 python3 /opt/image-checks/verify-tools.py jtop
 ```
 
-## Troubleshooting
+## FAQ and troubleshooting
 
-**Unsupported compute capability warning:** PyTorch may warn about Orin compute
-capability 8.7 even when CUDA works. Use `verify-gpu.py`, which executes real GPU
-workloads instead of relying only on `torch.cuda.is_available()`.
+**`jtop` says it cannot access `jtop.service`:** Check the host service and
+socket permissions:
 
-**pip reports missing CUDA or cuDNN packages:** JetPack supplies these as system
-packages, so their wheel metadata is intentionally absent. Do not install pip
-replacements to silence the warning.
+```bash
+systemctl status jtop.service
+ls -l /run/jtop.sock
+```
 
-**jtop raises `KeyError: 'online'`:** The tested host exposes a VIC entry without
-the field expected by jtop's compact statistics API. Raw GPU and memory readings
-still work.
+The socket should normally be owned by `root:jtop` with group read/write
+permissions. Add the login user to the `jtop` group, then start a new login
+session or reboot:
+
+```bash
+sudo usermod -aG jtop "$USER"
+sudo reboot
+```
+
+After logging in again, confirm the group is active with `groups`, then run
+`jtop` or `sudo jtop`. When using the container integration, mount the same host
+socket at `/run/jtop.sock`.
+
+## Other troubleshooting
+
+**CUDA or driver errors:** The Jetson host supplies the kernel driver while NGC
+provides CUDA userspace. Confirm the host JetPack/L4T version and NVIDIA
+Container Runtime setup, then run `verify-gpu.py` on the device. A successful
+build does not validate runtime compatibility.
+
+**pip reports dependency conflicts:** NGC pins framework packages through
+`/etc/pip/constraint.txt`. Keep its PyTorch/CUDA stack intact; adjust
+constraints deliberately if a project tool requires a conflicting package.
 
 **Out of memory:** Run GPU and notebook checks in separate containers and avoid
 oversized `--shm-size` values.
 
 ## Dependency policy
 
-- Exact versions or immutable source URLs live in the two lock files.
-- PyTorch and its large GPU dependencies are installed separately for better
-  Docker build caching.
-- Pip uses `--no-deps`; the lock files explicitly contain added dependencies.
-- `verify-build.py` reads the lock files directly, so there is one source of
-  truth for dependency versions.
+- `requirements-python.lock` pins project-added Python tools; installation uses
+  `--no-deps` to avoid changing NGC's preinstalled stack.
+- PyTorch and CUDA dependencies come from the pinned NGC base image and are not
+  duplicated in project package lists.
+- `verify-build.py` checks project additions and imports core NGC packages.
+  Recheck dependency closure when changing either the base tag or tool pins.
 
-When updating dependencies, change the lock files, rebuild, and run every
-verification command on the Jetson.
+When updating the NGC tag or project tools, rebuild and run every verification
+command on the Jetson.
 
 ## License and upstream
 
-dojon is licensed under the [MIT License](LICENSE).
-
-The base image is maintained by whitesscott. Original NVIDIA container sources
-are available at <https://gitlab.com/nvidia/container-images/l4t-jetpack>.
-Retain all applicable upstream license notices when redistributing images.
+dojon is licensed under the [MIT License](LICENSE). The base image is maintained
+by NVIDIA and published through NGC. Retain all applicable upstream license
+notices when redistributing images.

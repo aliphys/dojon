@@ -7,4 +7,5 @@ case "${ENABLE_JUPYTER:-0}" in
     *) echo "ENABLE_JUPYTER must be 0/1, false/true, or no/yes" >&2; exit 2 ;;
 esac
 
-exec /usr/local/bin/nvidia-cuda-arch-entrypoint.sh "$@"
+# This is the standard entrypoint used by NVIDIA framework containers.
+exec "$@"
