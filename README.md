@@ -41,12 +41,12 @@ on the Orin Nano.
 Build for ARM64 and run on a Jetson with Docker and NVIDIA Container Runtime:
 
 ```bash
-docker build --pull --platform linux/arm64 -t dojon:26.09 .
+docker build --pull --platform linux/arm64 -t dojon:26.09-ollama0.35.0 .
 
 docker run --rm -it --runtime=nvidia --shm-size=1g \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
   -v "$PWD":/workspace -w /workspace \
-  dojon:26.09
+  dojon:26.09-ollama0.35.0
 ```
 
 ### Ollama with JupyterLab
@@ -76,7 +76,7 @@ docker run --rm -it --runtime=nvidia --shm-size=1g \
   --mount type=bind,src="$HOME/ollama-models",dst=/models \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
   -v "$PWD":/workspace -w /workspace \
-  dojon:26.09
+  dojon:26.09-ollama0.35.0
 ```
 
 In another terminal, download and test a small model:
@@ -116,7 +116,7 @@ docker run --rm -it --runtime=nvidia --shm-size=1g \
   -p 127.0.0.1:8888:8888 \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
   -v "$PWD":/workspace -w /workspace \
-  dojon:26.09
+  dojon:26.09-ollama0.35.0
 ```
 
 Authentication remains enabled; use the token printed in the container logs.
@@ -217,7 +217,7 @@ socket:
 ```bash
 docker run --rm -it --runtime=nvidia \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
-  dojon:26.09 jtop
+  dojon:26.09-ollama0.35.0 jtop
 ```
 
 For W&B online use, pass `--env-file .env` to the container command. The
@@ -239,25 +239,25 @@ tool checks separately to limit memory use:
 
 ```bash
 # PyTorch CUDA, Torchvision, ONNX Runtime, and TensorRT
-docker run --rm --runtime=nvidia --shm-size=256m dojon:26.09 \
+docker run --rm --runtime=nvidia --shm-size=256m dojon:26.09-ollama0.35.0 \
   python3 /opt/image-checks/verify-gpu.py
 
 # torch.cond early exit through PyTorch, ONNX, and TensorRT
-docker run --rm --runtime=nvidia --shm-size=256m dojon:26.09 \
+docker run --rm --runtime=nvidia --shm-size=256m dojon:26.09-ollama0.35.0 \
   python3 /opt/image-checks/verify-torch-cond.py
 
 # Jupyter server and GPU-backed notebook kernel
-docker run --rm --runtime=nvidia --shm-size=256m dojon:26.09 \
+docker run --rm --runtime=nvidia --shm-size=256m dojon:26.09-ollama0.35.0 \
   python3 /opt/image-checks/verify-tools.py notebook
 
 # W&B offline logging
-docker run --rm dojon:26.09 \
+docker run --rm dojon:26.09-ollama0.35.0 \
   python3 /opt/image-checks/verify-tools.py wandb
 
 # jtop host connection
 docker run --rm --runtime=nvidia \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
-  dojon:26.09 python3 /opt/image-checks/verify-tools.py jtop
+  dojon:26.09-ollama0.35.0 python3 /opt/image-checks/verify-tools.py jtop
 
 # Ollama model generation and 100% GPU offload (model must already be pulled)
 docker exec dojon python3 /opt/image-checks/verify-ollama.py
