@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 # NVIDIA's unified PyTorch container, including its CUDA and PyTorch stack.
-FROM nvcr.io/nvidia/pytorch:26.09-py3 AS ollama-builder
+FROM nvcr.io/nvidia/pytorch:26.10-py3 AS ollama-builder
 
 ARG OLLAMA_VERSION=0.35.0
 ARG OLLAMA_BUILD_JOBS=1
@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
         -DCMAKE_CUDA_ARCHITECTURES=87 \
     && cmake --build build --parallel "${OLLAMA_BUILD_JOBS}"
 
-FROM nvcr.io/nvidia/pytorch:26.09-py3
+FROM nvcr.io/nvidia/pytorch:26.10-py3
 
 ARG PIP_DISABLE_PIP_VERSION_CHECK=1
 ARG OLLAMA_VERSION=0.35.0

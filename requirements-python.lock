@@ -1,5 +1,5 @@
 --index-url https://pypi.org/simple
-# Project Python tool set for the ARM64 NGC PyTorch 26.09 image.
+# Project Python tool set for the ARM64 NGC PyTorch 26.10 image.
 # PyTorch, CUDA, TensorRT, and other packages supplied by NGC are not listed here.
 annotated-types==0.8.0
 anyio==4.15.1

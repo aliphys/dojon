@@ -6,7 +6,7 @@ practical ML work done at the edge. The name combines **do** with **JON**
 (Jetson Orin Nano), while *dojon* is Swedish for “the dojo.” 😎
 
 The image extends NVIDIA's
-[`nvcr.io/nvidia/pytorch:26.09-py3`](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
+[`nvcr.io/nvidia/pytorch:26.10-py3`](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch)
 container with project tools including ONNX Runtime, SciPy, Matplotlib,
 Weights & Biases, and jtop. PyTorch, CUDA, cuDNN, TensorRT, JupyterLab, and
 other framework libraries come from the NGC base image; project package lists
@@ -17,17 +17,16 @@ during the image build.
 
 ## Compatibility
 
-Tested on a Jetson Orin Nano with JetPack/L4T R39.2.1. The NGC tag publishes an
-ARM64 image and the GPU, ONNX, TensorRT, and `torch.cond` checks pass on the
-device. Camera, display, and multimedia integrations remain separate host
-integration concerns.
+The 26.09 image passed GPU, ONNX, TensorRT, and `torch.cond` checks on a
+Jetson Orin Nano with JetPack/L4T R39.2.1. The 26.10 image targets the same
+hardware and still needs on-device validation.
 
 | Component | Version/status |
 | --- | --- |
-| NGC image | `nvcr.io/nvidia/pytorch:26.09-py3` (ARM64 manifest confirmed) |
-| Host JetPack / L4T | R39.2.1 / JetPack 7.2.1 |
-| Python / CUDA / PyTorch | 3.12 / 13.4 / 2.14.0a0+b2c75dd062.nv26.09 |
-| TensorRT / cuDNN | 11.3.0.99 / 9.26 |
+| NGC image | `nvcr.io/nvidia/pytorch:26.10-py3` |
+| Host JetPack / L4T | JetPack 7.2.1 / R39.2.1 |
+| Python / CUDA / PyTorch | 3.12 / 13.4.3 / 2.15.0a0+875d815502 |
+| TensorRT | 11.4.0.106 |
 | JupyterLab | Supplied by NGC |
 | ONNX / ONNX Runtime / W&B / jtop | Project tool set |
 
@@ -41,12 +40,12 @@ on the Orin Nano.
 Build for ARM64 and run on a Jetson with Docker and NVIDIA Container Runtime:
 
 ```bash
-docker build --pull --platform linux/arm64 -t dojon:26.09-ollama0.35.0 .
+docker build --pull --platform linux/arm64 -t dojon:26.10-ollama0.35.0 .
 
 docker run --rm -it --runtime=nvidia --shm-size=1g \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
   -v "$PWD":/workspace -w /workspace \
-  dojon:26.09-ollama0.35.0
+  dojon:26.10-ollama0.35.0
 ```
 
 ### Ollama with JupyterLab
@@ -76,7 +75,7 @@ docker run --rm -it --runtime=nvidia --shm-size=1g \
   --mount type=bind,src="$HOME/ollama-models",dst=/models \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
   -v "$PWD":/workspace -w /workspace \
-  dojon:26.09-ollama0.35.0
+  dojon:26.10-ollama0.35.0
 ```
 
 In another terminal, download and test a small model:
@@ -116,7 +115,7 @@ docker run --rm -it --runtime=nvidia --shm-size=1g \
   -p 127.0.0.1:8888:8888 \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
   -v "$PWD":/workspace -w /workspace \
-  dojon:26.09-ollama0.35.0
+  dojon:26.10-ollama0.35.0
 ```
 
 Authentication remains enabled; use the token printed in the container logs.
@@ -217,7 +216,7 @@ socket:
 ```bash
 docker run --rm -it --runtime=nvidia \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
-  dojon:26.09-ollama0.35.0 jtop
+  dojon:26.10-ollama0.35.0 jtop
 ```
 
 For W&B online use, pass `--env-file .env` to the container command. The
@@ -239,25 +238,25 @@ tool checks separately to limit memory use:
 
 ```bash
 # PyTorch CUDA, Torchvision, ONNX Runtime, and TensorRT
-docker run --rm --runtime=nvidia --shm-size=256m dojon:26.09-ollama0.35.0 \
+docker run --rm --runtime=nvidia --shm-size=256m dojon:26.10-ollama0.35.0 \
   python3 /opt/image-checks/verify-gpu.py
 
 # torch.cond early exit through PyTorch, ONNX, and TensorRT
-docker run --rm --runtime=nvidia --shm-size=256m dojon:26.09-ollama0.35.0 \
+docker run --rm --runtime=nvidia --shm-size=256m dojon:26.10-ollama0.35.0 \
   python3 /opt/image-checks/verify-torch-cond.py
 
 # Jupyter server and GPU-backed notebook kernel
-docker run --rm --runtime=nvidia --shm-size=256m dojon:26.09-ollama0.35.0 \
+docker run --rm --runtime=nvidia --shm-size=256m dojon:26.10-ollama0.35.0 \
   python3 /opt/image-checks/verify-tools.py notebook
 
 # W&B offline logging
-docker run --rm dojon:26.09-ollama0.35.0 \
+docker run --rm dojon:26.10-ollama0.35.0 \
   python3 /opt/image-checks/verify-tools.py wandb
 
 # jtop host connection
 docker run --rm --runtime=nvidia \
   --mount type=bind,src=/run/jtop.sock,dst=/run/jtop.sock \
-  dojon:26.09-ollama0.35.0 python3 /opt/image-checks/verify-tools.py jtop
+  dojon:26.10-ollama0.35.0 python3 /opt/image-checks/verify-tools.py jtop
 
 # Ollama model generation and 100% GPU offload (model must already be pulled)
 docker exec dojon python3 /opt/image-checks/verify-ollama.py

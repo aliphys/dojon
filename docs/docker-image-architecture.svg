@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+<title id="title">dojon Docker image architecture</title>
+<desc id="desc">Architecture diagram showing the Jetson Orin Nano host, NVIDIA NGC PyTorch base image, dojon additions, optional Ollama build stage, runtime services, and mounted host resources.</desc>
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f7fafc"/><stop offset="1" stop-color="#e8f0f7"/></linearGradient>
+  <linearGradient id="hero" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#76b900"/><stop offset="1" stop-color="#4b8500"/></linearGradient>
+  <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="5" stdDeviation="8" flood-color="#183047" flood-opacity=".12"/></filter>
+  <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0 0 10 5 0 10Z" fill="#60758a"/></marker>
+  <style>
+    text{font-family:Inter,Segoe UI,Arial,sans-serif;fill:#16324a}.title{font-size:38px;font-weight:750}.subtitle{font-size:18px;fill:#536a7d}.section{font-size:18px;font-weight:750;letter-spacing:1px;fill:#456176}.head{font-size:22px;font-weight:700}.body{font-size:17px;fill:#425b70}.small{font-size:15px;fill:#5e7486}.white{fill:#fff}.green{fill:#4b8500}.line{stroke:#60758a;stroke-width:3;fill:none;marker-end:url(#arrow)}
+  </style>
+</defs>
+<rect width="1600" height="1000" fill="url(#bg)"/>
+<text x="90" y="82" class="title">How the dojon Docker image is set up</text>
+<text x="90" y="119" class="subtitle">A Jetson Orin Nano ML environment built on NVIDIA’s framework container</text>
+
+<!-- Main image stack -->
+<rect x="80" y="160" width="950" height="690" rx="28" fill="#fff" filter="url(#shadow)"/>
+<text x="120" y="205" class="section">DOJON IMAGE</text>
+<rect x="120" y="230" width="870" height="115" rx="18" fill="url(#hero)"/>
+<text x="155" y="275" class="head white">NVIDIA NGC PyTorch 26.09 · ARM64</text>
+<text x="155" y="310" class="body white">Python 3.12 · PyTorch 2.14 · CUDA 13.4 · cuDNN · TensorRT 11.3.0.99 · JupyterLab</text>
+<text x="155" y="332" class="small white">NVIDIA supplies the core framework and GPU software stack</text>
+
+<rect x="120" y="370" width="870" height="158" rx="18" fill="#edf5e2" stroke="#c9dfae" stroke-width="2"/>
+<text x="155" y="410" class="head">Project additions</text>
+<rect x="155" y="431" width="230" height="58" rx="12" fill="#fff"/><text x="175" y="467" class="body">Python tool set</text>
+<rect x="405" y="431" width="245" height="58" rx="12" fill="#fff"/><text x="425" y="467" class="body">GPU / tool checks</text>
+<rect x="670" y="431" width="280" height="58" rx="12" fill="#fff"/><text x="690" y="467" class="body">Startup configuration</text>
+<text x="155" y="514" class="small">ONNX Runtime · SciPy · Matplotlib · W&amp;B · jtop integration</text>
+
+<rect x="120" y="553" width="870" height="135" rx="18" fill="#eef3f8" stroke="#cfdae4" stroke-width="2"/>
+<text x="155" y="592" class="head">Optional Ollama build (multi-stage)</text>
+<text x="155" y="626" class="body">Build Ollama 0.35.0 for Orin (SM 8.7) with the CUDA 13 backend</text>
+<text x="155" y="657" class="small">Copy the CLI and backend into the final image; model files stay in a mounted volume</text>
+
+<rect x="120" y="713" width="870" height="100" rx="18" fill="#fff7e8" stroke="#eed39e" stroke-width="2"/>
+<text x="155" y="753" class="head">Runtime entrypoint</text>
+<text x="155" y="785" class="body">Starts JupyterLab in the foreground; optionally starts Ollama as a service</text>
+
+<!-- Runtime panel -->
+<rect x="1080" y="160" width="440" height="335" rx="28" fill="#fff" filter="url(#shadow)"/>
+<text x="1120" y="205" class="section">WHEN THE CONTAINER RUNS</text>
+<rect x="1120" y="237" width="360" height="90" rx="16" fill="#e8f3d9"/>
+<text x="1150" y="274" class="head">JupyterLab</text><text x="1150" y="305" class="body">Port 8888 · notebooks and ML work</text>
+<rect x="1120" y="348" width="360" height="90" rx="16" fill="#edf2f7"/>
+<text x="1150" y="385" class="head">Ollama (optional)</text><text x="1150" y="416" class="body">Port 11434 · local model API</text>
+<text x="1120" y="470" class="small">Enable services with environment settings</text>
+
+<!-- host panel -->
+<rect x="1080" y="530" width="440" height="320" rx="28" fill="#fff" filter="url(#shadow)"/>
+<text x="1120" y="575" class="section">JETSON HOST</text>
+<text x="1120" y="610" class="small">Orin Nano · JetPack 7.2.1 / L4T R39.2.1</text>
+<rect x="1120" y="635" width="360" height="62" rx="14" fill="#f1f5f8"/><text x="1150" y="674" class="body">Kernel driver + NVIDIA Container Runtime</text>
+<rect x="1120" y="713" width="170" height="70" rx="14" fill="#f1f5f8"/><text x="1140" y="744" class="body">Workspace</text><text x="1140" y="769" class="small">bind-mounted</text>
+<rect x="1310" y="713" width="170" height="70" rx="14" fill="#f1f5f8"/><text x="1330" y="744" class="body">Model data</text><text x="1330" y="769" class="small">persistent volume</text>
+<text x="1120" y="820" class="small">Optional jtop socket mount supplies host telemetry</text>
+
+<!-- arrows -->
+<path d="M990 291 H1050 Q1065 291 1080 291" class="line"/>
+<path d="M990 763 H1045 V663 H1080" class="line"/>
+<path d="M1300 495 V520" class="line"/>
+<text x="80" y="918" class="small">Built from Dockerfile · dependencies are pinned · verification runs during image build and on-device</text>
+</svg>
+

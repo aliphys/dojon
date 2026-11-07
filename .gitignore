@@ -1,3 +1,7 @@
 claude.txt
 todo.txt
 .env
+
+/data/mnist/
+/mnist_energy_results.csv
+/mnist_energy_training_checkpoint.csv
